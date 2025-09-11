@@ -63,18 +63,15 @@ withr::with_dir(tmpdir, {
         overwrite = TRUE
       )
       # update plot schema and (partial) bundles
-      Schema <- jsonlite::fromJSON(Sys.glob("dist/plot-schema.json"))
-      tmp_file <- tempfile(pattern = "plotly_constants_", fileext = ".js")
-      utils::download.file(
-        url = paste0("https://raw.githubusercontent.com/plotly/plotly.js/", basename(zip), "/tasks/util/constants.js"),
-        destfile = tmp_file,
-        quiet = TRUE,
-        mode = "wb"
-      )
+      Schema <- jsonlite::fromJSON("dist/plot-schema.json")
       bundleTraceMap <-
-        paste0(readLines(tmp_file), collapse = "\n") |>
-        stringr::str_extract(pattern = "(?<=var partialBundleTraces = )\\{[^}]+\\}") |>
-        yaml::read_yaml(text = _)
+        paste0(readLines("tasks/util/constants.js"), collapse = "\n") |>
+        stringr::str_extract(pattern = "(?<=\\b(const|var) partialBundleTraces = )\\{[^}]+\\}")
+      
+      if (is.na(bundleTraceMap)) {
+        stop("No `partialBundleTraces` variable definition found in Plotly source file `tasks/util/constants.js`. Does the regex pattern need an update?")
+      }
+      bundleTraceMap <- yaml::read_yaml(text = bundleTraceMap)
       
       withr::with_dir(
         pkg_dir, usethis::use_data(
@@ -83,7 +80,8 @@ withr::with_dir(tmpdir, {
           internal = TRUE,
           overwrite = TRUE,
           compress = "xz",
-          version = 3L
+          # TODO: use `version = 3L` once we depend on R (>= 3.5.0)
+          version = 2L
         )
       )
       
@@ -99,3 +97,6 @@ withr::with_dir(tmpdir, {
       message("Update plotlyMainBundle()'s version with ", basename(zip))
   })
 })
+
+# clean up
+unlink(tmpdir, recursive = TRUE)
